@@ -8,7 +8,7 @@
 
 ## ✨ 在线预览
 
-**👉 [点击这里立即开始学习](https://numinvis.github.io/FastAPI-/)**
+**👉 [点击这里立即开始学习](https://numinvis.github.io/fastapi-for-beginners/)**
 
 > 本项目已开启 GitHub Pages，所有代码高亮、主题切换、侧边导航均可在线体验。
 
@@ -37,8 +37,8 @@
 ### 方式一：直接打开（最简单）
 ```bash
 # 克隆仓库
-git clone https://github.com/NumInvis/FastAPI-.git
-cd FastAPI-
+git clone https://github.com/NumInvis/fastapi-for-beginners.git
+cd fastapi-for-beginners
 
 # 双击 index.html 即可在浏览器中打开课程
 ```
