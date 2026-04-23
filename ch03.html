@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch03 依赖注入：代码的乐高积木 | FastAPI 大师课</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>FastAPI 大师课</span>
+  </a>
+  <div class="topbar-actions">
+    <button class="btn-icon menu-toggle" id="menu-toggle" aria-label="菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="btn-icon" id="theme-toggle" aria-label="切换主题">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside class="sidebar">
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">课程导览</div><a href="index.html" class="sidebar-link">课程介绍</a></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">基础篇</div>
+    <a href="ch01.html" class="sidebar-link">01 第一个 API</a>
+    <a href="ch02.html" class="sidebar-link">02 数据校验</a>
+    <a href="ch03.html" class="sidebar-link active">03 依赖注入</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">进阶篇</div>
+    <a href="ch04.html" class="sidebar-link">04 数据库</a>
+    <a href="ch05.html" class="sidebar-link">05 登录与权限</a>
+    <a href="ch06.html" class="sidebar-link">06 错误处理</a>
+    <a href="ch07.html" class="sidebar-link">07 异步</a>
+    <a href="ch08.html" class="sidebar-link">08 WebSocket</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">部署篇</div>
+    <a href="ch09.html" class="sidebar-link">09 测试</a>
+    <a href="ch10.html" class="sidebar-link">10 性能与部署</a>
+    <a href="ch11.html" class="sidebar-link">11 企业级架构</a>
+  </div>
+</aside>
+<div class="overlay"></div>
+
+<main class="main">
+<article class="content">
+
+<h1>Chapter 03 · 依赖注入：代码的乐高积木</h1>
+
+<div class="learning-objectives">
+  <h3>📚 学完本章，你将能够：</h3>
+  <ul>
+    <li>解释"依赖注入"解决了什么实际问题（告别复制粘贴）</li>
+    <li>用 <code>Depends</code> 把公共逻辑抽象成可复用函数</li>
+    <li>理解子依赖链：依赖的依赖的依赖</li>
+    <li>用 <code>yield</code> 管理资源的创建和释放（如数据库连接）</li>
+    <li>在测试中替换依赖，实现不启动数据库的单元测试</li>
+  </ul>
+</div>
+
+<div class="scenario-box">
+  <h4>💡 场景引入</h4>
+  <p>你的图书 API 有 10 个接口需要"当前登录用户"信息。你不得不在每个接口里重复写一遍"从请求头读取 Token → 解析 Token → 查数据库确认用户存在"的流程。</p>
+  <p>更麻烦的是，如果 Token 的解析逻辑变了（比如换了加密算法），你得改 10 个地方。<strong>依赖注入就是来解决这种重复问题的。</strong></p>
+</div>
+
+<h2>3.1 没有依赖注入的噩梦</h2>
+
+<div class="code-block">
+<div class="code-header">❌ 到处复制粘贴</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">@app.get("/books")
+async def list_books(authorization: str = Header()):
+    token = authorization.replace("Bearer ", "")
+    user = verify_token(token)  # 同样的代码
+    if not user:
+        raise HTTPException(401)
+    return books
+
+@app.post("/books")
+async def create_book(data: BookCreate, authorization: str = Header()):
+    token = authorization.replace("Bearer ", "")
+    user = verify_token(token)  # 又写了一遍！
+    if not user:
+        raise HTTPException(401)
+    ...
+
+@app.delete("/books/{book_id}")
+async def delete_book(book_id: int, authorization: str = Header()):
+    token = authorization.replace("Bearer ", "")
+    user = verify_token(token)  # 第三遍！！
+    if not user:
+        raise HTTPException(401)
+    ...</code></pre>
+</div>
+
+<p>这段代码有三个问题：</p>
+<ol>
+  <li><strong>重复</strong>：同样的逻辑写了 N 遍</li>
+  <li><strong>难维护</strong>：改一处逻辑要改 N 个地方</li>
+  <li><strong>难测试</strong>：每个接口都耦合了 Token 解析，测试时必须走完整流程</li>
+</ol>
+
+<h2>3.2 Depends：把公共逻辑抽出来</h2>
+
+<p>FastAPI 的 <code>Depends</code> 让你把公共逻辑写成一个函数，然后在需要的地方"注入"：</p>
+
+<div class="code-block">
+<div class="code-header">✅ 使用依赖注入</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from fastapi import Depends, HTTPException, Header
+from typing import Annotated
+
+async def get_current_user(authorization: Annotated[str, Header()]) -> User:
+    token = authorization.replace("Bearer ", "")
+    user = verify_token(token)
+    if not user:
+        raise HTTPException(401, detail="Invalid token")
+    return user
+
+@app.get("/books")
+async def list_books(user: Annotated[User, Depends(get_current_user)]):
+    # user 已经是验证通过的用户对象
+    return books
+
+@app.post("/books")
+async def create_book(data: BookCreate, user: Annotated[User, Depends(get_current_user)]):
+    ...
+
+@app.delete("/books/{book_id}")
+async def delete_book(book_id: int, user: Annotated[User, Depends(get_current_user)]):
+    ...</code></pre>
+</div>
+
+<p>现在 Token 解析逻辑只写在一处。所有接口都通过 <code>Depends(get_current_user)</code> 复用这段逻辑。如果以后要改解析方式，只改 <code>get_current_user</code> 一个函数即可。</p>
+
+<div class="diagram-box">
+  <div class="diagram-title">依赖注入的工作方式</div>
+  <div class="dep-diagram">
+    <div class="dep-layer">
+      <div class="dep-block route">浏览器请求<br><code>GET /books</code></div>
+    </div>
+    <div class="dep-connector"></div>
+    <div class="dep-layer">
+      <div class="dep-block dep">执行依赖<br><code>get_current_user</code></div>
+    </div>
+    <div class="dep-connector"></div>
+    <div class="dep-layer">
+      <div class="dep-block route">进入视图函数<br><code>list_books(user)</code></div>
+    </div>
+  </div>
+</div>
+
+<h2>3.3 子依赖链</h2>
+
+<p>依赖函数本身也可以依赖其他依赖函数。这叫做<strong>子依赖</strong>。</p>
+
+<div class="code-block">
+<div class="code-header">三级依赖链</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python"># 第一层：从 Header 提取 Token
+async def get_token(auth: Annotated[str, Header(alias="Authorization")]) -> str:
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Must use Bearer token")
+    return auth[7:]
+
+# 第二层：验证 Token 得到用户
+async def get_current_user(token: Annotated[str, Depends(get_token)]) -> User:
+    user = verify_jwt(token)
+    if not user:
+        raise HTTPException(401, "Invalid or expired token")
+    return user
+
+# 第三层：检查是否是管理员
+async def require_admin(user: Annotated[User, Depends(get_current_user)]) -> User:
+    if user.role != "admin":
+        raise HTTPException(403, "Admin only")
+    return user
+
+# 使用
+@app.delete("/users/{user_id}")
+async def ban_user(user: Annotated[User, Depends(require_admin)]):
+    ...</code></pre>
+</div>
+
+<p>当请求进入 <code>/users/5</code> 时，FastAPI 会自动按顺序执行：</p>
+<ol>
+  <li><code>get_token</code> → 提取字符串</li>
+  <li><code>get_current_user</code> → 验证并得到 User 对象</li>
+  <li><code>require_admin</code> → 检查角色</li>
+  <li>最后进入 <code>ban_user</code> 视图函数</li>
+</ol>
+
+<div class="callout info">
+  <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+  <div>
+    <strong>依赖缓存</strong>
+    <p style="margin-bottom:0">同一个请求中，如果多个参数都 <code>Depends(get_current_user)</code>，FastAPI 只会执行一次 <code>get_current_user</code>，然后缓存结果复用。这避免了重复查数据库。</p>
+  </div>
+</div>
+
+<h2>3.4 yield：管理资源的创建和释放</h2>
+
+<p>数据库连接、文件句柄这类资源需要"用完后关闭"。<code>yield</code> 让依赖函数变成上下文管理器：</p>
+
+<div class="code-block">
+<div class="code-header">yield 依赖</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">async def get_db():
+    db = create_database_connection()  # 请求开始时创建连接
+    try:
+        yield db  # 把连接交给视图函数使用
+    finally:
+        db.close()  # 请求结束后关闭连接，即使出异常也会执行</code></pre>
+</div>
+
+<p><code>yield</code> 之前的代码在视图函数前执行，<code>yield</code> 之后的代码在视图函数后执行（包括异常时）。这非常适合数据库会话管理：</p>
+
+<div class="code-block">
+<div class="code-header">数据库会话依赖（预告：下一章详解）</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+async_session = async_sessionmaker(engine, expire_on_commit=False)
+
+async def get_db():
+    async with async_session() as session:
+        yield session  # 视图函数使用 session
+        # 退出 async with 时自动关闭连接</code></pre>
+</div>
+
+<h2>3.5 依赖覆盖：测试的杀手锏</h2>
+
+<p>这是依赖注入最强大的特性。测试中你可以<strong>临时替换</strong>任何一个依赖，不用修改业务代码。</p>
+
+<div class="code-block">
+<div class="code-header">测试覆盖</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from fastapi.testclient import TestClient
+
+# 测试中不用真的去验证 JWT
+async def mock_current_user():
+    return User(id=1, username="tester", role="admin")
+
+# 把真实的 get_current_user 换成假的
+app.dependency_overrides[get_current_user] = mock_current_user
+
+client = TestClient(app)
+
+def test_delete_book():
+    response = client.delete("/books/1")
+    assert response.status_code == 204
+
+# 测试结束后清理
+app.dependency_overrides.clear()</code></pre>
+</div>
+
+<p>这意味着：测试认证接口时，你不需要真的生成 Token；测试数据库操作时，你可以换成内存数据库——这些都会在第 9 章详细展开。</p>
+
+<!-- ==================== 测验 ==================== -->
+<h2>🎯 知识检测</h2>
+
+<div class="quiz-box" data-quiz-id="ch03_q1">
+  <div class="quiz-title">问题 1</div>
+  <div class="quiz-question"><code>Depends</code> 的核心作用是什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">让代码运行得更快</div>
+    <div class="quiz-option" data-correct="true">把公共逻辑抽成可复用函数，自动注入到路由中</div>
+    <div class="quiz-option" data-correct="false">自动生成数据库表</div>
+    <div class="quiz-option" data-correct="false">替代 try/except 处理异常</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>Depends 解决的是"代码重复"问题。你把公共逻辑（如获取当前用户、打开数据库连接）写成函数，FastAPI 会在请求到达路由前自动调用它，并把结果注入参数。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch03_q2">
+  <div class="quiz-title">问题 2</div>
+  <div class="quiz-question">以下关于 yield 依赖的说法，哪个是正确的？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">yield 之前的代码在响应发送后执行</div>
+    <div class="quiz-option" data-correct="true">yield 之后的代码在视图函数结束后执行，即使发生异常</div>
+    <div class="quiz-option" data-correct="false">yield 依赖不能返回数据给视图函数</div>
+    <div class="quiz-option" data-correct="false">yield 只能在同步函数中使用</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>yield 把依赖分成两段：前段在路由前执行（如创建连接），后段在路由后执行（如关闭连接）。后段在 finally 语义下执行，保证资源一定被释放。它可以返回数据（yield 后面的值就是注入的值），且支持 async。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch03_q3">
+  <div class="quiz-title">问题 3</div>
+  <div class="quiz-question">在测试中，<code>app.dependency_overrides[get_db] = fake_db</code> 的作用是什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">永久修改了应用的数据库配置</div>
+    <div class="quiz-option" data-correct="true">临时替换 get_db 依赖，测试结束后可以清除</div>
+    <div class="quiz-option" data-correct="false">只对 GET 请求生效</div>
+    <div class="quiz-option" data-correct="false">会自动回滚数据库事务</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>dependency_overrides 是一个字典，只在当前应用实例中临时替换依赖。测试结束后调用 <code>.clear()</code> 即可恢复，不会污染其他测试或生产代码。
+  </div>
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<hr>
+
+<h2>本章小结</h2>
+
+<div class="step-flow">
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>Depends 消灭重复代码</h4>
+      <p>把"获取当前用户""打开数据库"这类公共逻辑写成函数，到处复用。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>依赖可以无限嵌套</h4>
+      <p>get_token → get_current_user → require_admin，像搭积木一样组合权限。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>yield 管理资源生命周期</h4>
+      <p>连接数据库 → yield 给路由使用 → 路由结束关闭连接。保证不泄漏。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>依赖覆盖让测试更轻松</h4>
+      <p>测试中替换真实依赖为 Mock，不用真的连数据库或发邮件。</p>
+    </div>
+  </div>
+</div>
+
+<div class="check-banner">
+  <h3>🛠️ 动手实验</h3>
+  <p>实现一个三层依赖链：<code>get_token</code>（从 Header 提取）→ <code>get_current_user</code>（验证用户存在）→ <code>require_active_user</code>（检查用户未被冻结）。<br>创建一个只有登录用户能访问的接口和一个只有管理员能访问的接口。测试时使用 dependency_overrides 替换认证依赖。</p>
+</div>
+
+</article>
+</main>
+
+<button class="back-to-top" id="back-to-top" aria-label="返回顶部">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
+<script src="script.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

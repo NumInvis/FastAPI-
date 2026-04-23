@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastAPI 大师课 | 从零到精通</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>FastAPI 大师课</span>
+  </a>
+  <div class="topbar-actions">
+    <button class="btn-icon menu-toggle" id="menu-toggle" aria-label="菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="btn-icon" id="theme-toggle" aria-label="切换主题">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside class="sidebar">
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">课程导览</div><a href="index.html" class="sidebar-link active">课程介绍</a></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">基础篇</div>
+    <a href="ch01.html" class="sidebar-link">01 第一个 API：从请求到响应</a>
+    <a href="ch02.html" class="sidebar-link">02 数据校验：让数据安全进门</a>
+    <a href="ch03.html" class="sidebar-link">03 依赖注入：代码的乐高积木</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">进阶篇</div>
+    <a href="ch04.html" class="sidebar-link">04 数据库：数据的持久化家园</a>
+    <a href="ch05.html" class="sidebar-link">05 登录与权限：守门人与通行证</a>
+    <a href="ch06.html" class="sidebar-link">06 错误处理与日志：事故的善后</a>
+    <a href="ch07.html" class="sidebar-link">07 异步与后台任务：不等人的艺术</a>
+    <a href="ch08.html" class="sidebar-link">08 WebSocket：实时对话的桥梁</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">部署篇</div>
+    <a href="ch09.html" class="sidebar-link">09 测试：在上线前发现问题</a>
+    <a href="ch10.html" class="sidebar-link">10 性能优化与部署：走向世界</a>
+    <a href="ch11.html" class="sidebar-link">11 企业级架构：像专家一样组织代码</a>
+  </div>
+</aside>
+<div class="overlay"></div>
+
+<main class="main">
+  <article class="content">
+
+    <div class="hero">
+      <h1>FastAPI 大师课</h1>
+      <p>你懂 Python 语法，但从未写过后端？<br>这门课从"浏览器如何访问服务器"开始，手把手带你做出生产级的 Web API。</p>
+      <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:8px;">
+        <span class="tag green">Python 3.10+</span>
+        <span class="tag blue">零基础后端</span>
+        <span class="tag orange">项目实战</span>
+      </div>
+    </div>
+
+    <hr>
+
+    <h2>这门课怎么教你？</h2>
+    <p>不是罗列 API，而是用<strong>故事场景</strong>引入每个知识点：</p>
+
+    <div class="step-flow">
+      <div class="step-item">
+        <div class="step-badge">1</div>
+        <div class="step-content">
+          <h4>场景引入</h4>
+          <p>先给你一个真实的业务场景（比如"用户注册时要检查邮箱格式"），让你明白学这个东西是为了解决什么问题。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-badge">2</div>
+        <div class="step-content">
+          <h4>原理图解</h4>
+          <p>用可视化流程图展示背后的运行机制，不让你死记硬背。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-badge">3</div>
+        <div class="step-content">
+          <h4>代码实战</h4>
+          <p>一步一步写出代码，同时展示"新手常犯的错误"和"正确的写法"做对比。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="step-badge">4</div>
+        <div class="step-content">
+          <h4>交互测验</h4>
+          <p>每章末尾都有选择题和代码分析题，答错会告诉你为什么，巩固记忆。</p>
+        </div>
+      </div>
+    </div>
+
+    <h2>课程路线图</h2>
+    <div class="course-grid">
+      <a href="ch01.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">基础篇 · 01</div>
+        <h3>第一个 API：从请求到响应</h3>
+        <p>后端到底是什么？HTTP 请求如何进入你的代码？GET、POST、路径参数、查询参数、JSON 响应。</p>
+      </a>
+      <a href="ch02.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">基础篇 · 02</div>
+        <h3>数据校验：让数据安全进门</h3>
+        <p>用户传什么你都得信吗？Pydantic 帮你自动检查数据类型、长度、范围，错误时返回友好提示。</p>
+      </a>
+      <a href="ch03.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">基础篇 · 03</div>
+        <h3>依赖注入：代码的乐高积木</h3>
+        <p>如何避免到处复制粘贴相同的代码？学会用依赖把通用逻辑（如数据库连接）抽象成可复用的积木。</p>
+      </a>
+      <a href="ch04.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">进阶篇 · 04</div>
+        <h3>数据库：数据的持久化家园</h3>
+        <p>数据不能只存在内存里。SQLAlchemy 带你优雅地操作数据库，不用手写 SQL。</p>
+      </a>
+      <a href="ch05.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">进阶篇 · 05</div>
+        <h3>登录与权限：守门人与通行证</h3>
+        <p>密码怎么存才安全？JWT 令牌是什么？如何实现"只有管理员能删除"的权限控制？</p>
+      </a>
+      <a href="ch06.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">进阶篇 · 06</div>
+        <h3>错误处理与日志：事故的善后</h3>
+        <p>代码出错了怎么办？如何给前端返回统一的错误格式？怎么记录日志方便事后排查？</p>
+      </a>
+      <a href="ch07.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">进阶篇 · 07</div>
+        <h3>异步与后台任务：不等人的艺术</h3>
+        <p>发邮件为什么不能让用户等？async/await 到底在干什么？Celery 任务队列初探。</p>
+      </a>
+      <a href="ch08.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">进阶篇 · 08</div>
+        <h3>WebSocket：实时对话的桥梁</h3>
+        <p>HTTP 是一次性对话，WebSocket 是持续通话。实现聊天室、实时通知推送。</p>
+      </a>
+      <a href="ch09.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">部署篇 · 09</div>
+        <h3>测试：在上线前发现问题</h3>
+        <p>手动刷新浏览器测试太蠢了。pytest 自动帮你测试每个接口，确保重构不破坏旧功能。</p>
+      </a>
+      <a href="ch10.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">部署篇 · 10</div>
+        <h3>性能优化与部署：走向世界</h3>
+        <p>缓存、限流、Docker 容器化、Nginx 反向代理。让你的服务从笔记本走向云服务器。</p>
+      </a>
+      <a href="ch11.html" class="course-card">
+        <div class="course-card-status"></div>
+        <div class="course-card-num">部署篇 · 11</div>
+        <h3>企业级架构：像专家一样组织代码</h3>
+        <p>项目大了代码怎么放？Clean Architecture 分层、健康检查、监控告警。毕业项目。</p>
+      </a>
+    </div>
+
+    <div class="callout tip">
+      <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      <div>
+        <strong>开始学习前的准备</strong>
+        <p style="margin-bottom:0">你需要：安装 Python 3.10+、一个代码编辑器（VS Code 或 PyCharm）、一颗愿意动手实践的心。不需要懂前端，不需要懂数据库，不需要懂网络协议——这些都会在课程中讲到。</p>
+      </div>
+    </div>
+
+  </article>
+</main>
+
+<button class="back-to-top" id="back-to-top" aria-label="返回顶部">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
+<script src="script.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

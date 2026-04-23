@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch08 WebSocket：实时对话的桥梁 | FastAPI 大师课</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>FastAPI 大师课</span>
+  </a>
+  <div class="topbar-actions">
+    <button class="btn-icon menu-toggle" id="menu-toggle" aria-label="菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="btn-icon" id="theme-toggle" aria-label="切换主题">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside class="sidebar">
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">课程导览</div><a href="index.html" class="sidebar-link">课程介绍</a></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">基础篇</div>
+    <a href="ch01.html" class="sidebar-link">01 第一个 API</a>
+    <a href="ch02.html" class="sidebar-link">02 数据校验</a>
+    <a href="ch03.html" class="sidebar-link">03 依赖注入</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">进阶篇</div>
+    <a href="ch04.html" class="sidebar-link">04 数据库</a>
+    <a href="ch05.html" class="sidebar-link">05 登录与权限</a>
+    <a href="ch06.html" class="sidebar-link">06 错误处理</a>
+    <a href="ch07.html" class="sidebar-link">07 异步</a>
+    <a href="ch08.html" class="sidebar-link active">08 WebSocket</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">部署篇</div>
+    <a href="ch09.html" class="sidebar-link">09 测试</a>
+    <a href="ch10.html" class="sidebar-link">10 性能与部署</a>
+    <a href="ch11.html" class="sidebar-link">11 企业级架构</a>
+  </div>
+</aside>
+<div class="overlay"></div>
+
+<main class="main">
+<article class="content">
+
+<h1>Chapter 08 · WebSocket：实时对话的桥梁</h1>
+
+<div class="learning-objectives">
+  <h3>📚 学完本章，你将能够：</h3>
+  <ul>
+    <li>解释 HTTP 和 WebSocket 的本质区别（一次性对话 vs 持续通话）</li>
+    <li>用 FastAPI 建立 WebSocket 连接，收发消息</li>
+    <li>管理多个连接，实现广播（给所有人发消息）</li>
+    <li>在 WebSocket 中做用户认证</li>
+    <li>理解为什么 WebSocket 需要心跳保活</li>
+  </ul>
+</div>
+
+<div class="scenario-box">
+  <h4>💡 场景引入</h4>
+  <p>你的图书网站新增了"实时通知"功能：当有新书上架时，所有在线用户立即收到弹窗提醒。</p>
+  <p>用普通的 HTTP 怎么做？前端只能每隔几秒问一次服务器"有新消息吗？"——这叫<strong>轮询</strong>，既浪费带宽又延迟高。<strong>WebSocket</strong> 让服务器能主动推消息给客户端，像打电话而不是寄信。</p>
+</div>
+
+<h2>8.1 HTTP vs WebSocket：寄信 vs 打电话</h2>
+
+<table>
+  <tr><th>特性</th><th>HTTP</th><th>WebSocket</th></tr>
+  <tr><td>连接方式</td><td>每次请求新建连接（或复用）</td><td>一次握手，长期保持</td></tr>
+  <tr><td>通信方向</td><td>客户端主动问，服务器答</td><td>双方随时都能发消息</td></tr>
+  <tr><td>头部开销</td><td>每次请求都带大量头部</td><td>握手后数据帧很小</td></tr>
+  <tr><td>适用场景</td><td>获取数据、提交表单</td><td>聊天、通知、股票行情、游戏</td></tr>
+</table>
+
+<h2>8.2 第一个 WebSocket 接口</h2>
+
+<div class="code-block">
+<div class="code-header">WebSocket 基础</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from fastapi import WebSocket, WebSocketDisconnect
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()  # 接受连接
+    try:
+        while True:
+            # 等待客户端发消息
+            data = await websocket.receive_text()
+            # 给客户端回消息
+            await websocket.send_text(f"你说了：{data}")
+    except WebSocketDisconnect:
+        print("客户端断开连接")</code></pre>
+</div>
+
+<p>和 HTTP 路由不同，WebSocket 路由里的 <code>while True</code> 会让函数一直运行，直到客户端断开。这是一个<strong>长连接</strong>。</p>
+
+<h2>8.3 管理多个连接：聊天室</h2>
+
+<p>单个连接没意思。真正的需求是：服务器同时和很多人保持通话，某个人说话时，其他人都能听到。</p>
+
+<div class="code-block">
+<div class="code-header">ConnectionManager</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: str):
+        for connection in self.active_connections:
+            await connection.send_text(message)
+
+manager = ConnectionManager()
+
+@app.websocket("/chat")
+async def chat(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # 把消息发给所有人（包括自己）
+            await manager.broadcast(f"某人: {data}")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)</code></pre>
+</div>
+
+<div class="callout warning">
+  <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <div>
+    <strong>并发发送的隐患</strong>
+    <p style="margin-bottom:0">上面的 <code>broadcast</code> 用 for 循环逐个 await，如果连接很多，后面的用户会收到明显延迟。生产环境应该用 <code>asyncio.gather</code> 并发发送。</p>
+  </div>
+</div>
+
+<h2>8.4 WebSocket 中的认证</h2>
+
+<p>浏览器在建立 WebSocket 连接时，不能像 HTTP 那样方便地自定义 Header。标准做法是通过 URL 查询参数传递 Token：</p>
+
+<div class="code-block">
+<div class="code-header">WS 认证</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">@app.websocket("/ws")
+async def websocket_auth(websocket: WebSocket, token: str | None = None):
+    if not token:
+        await websocket.close(code=4001, reason="Missing token")
+        return
+
+    payload = verify_token(token)
+    if not payload:
+        await websocket.close(code=4001, reason="Invalid token")
+        return
+
+    await websocket.accept()
+    # 现在你知道这个连接是谁了
+    user_id = payload["sub"]
+    ...</code></pre>
+</div>
+
+<p>前端连接时：<code>wss://api.example.com/ws?token=eyJhbG...</code></p>
+
+<h2>8.5 心跳保活</h2>
+
+<p>Nginx 和防火墙会在连接空闲一段时间后自动切断它。WebSocket 需要<strong>心跳机制</strong>：客户端和服务端定期互发小消息，证明"我还活着"。</p>
+
+<div class="code-block">
+<div class="code-header">心跳机制</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">@app.websocket("/ws")
+async def websocket_heartbeat(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+                continue
+            # 处理正常业务消息...
+    except WebSocketDisconnect:
+        ...</code></pre>
+</div>
+
+<!-- ==================== 测验 ==================== -->
+<h2>🎯 知识检测</h2>
+
+<div class="quiz-box" data-quiz-id="ch08_q1">
+  <div class="quiz-title">问题 1</div>
+  <div class="quiz-question">WebSocket 相比 HTTP 轮询的主要优势是什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">WebSocket 安全性更高</div>
+    <div class="quiz-option" data-correct="true">服务器可以主动推送消息，延迟更低，带宽更省</div>
+    <div class="quiz-option" data-correct="false">WebSocket 不需要网络连接</div>
+    <div class="quiz-option" data-correct="false">WebSocket 只能发文字消息</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>HTTP 轮询是客户端不断问"有新消息吗？"，大部分请求都是浪费。WebSocket 建立长连接后，服务器有新消息立即推送，既省带宽又低延迟。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch08_q2">
+  <div class="quiz-title">问题 2</div>
+  <div class="quiz-question">为什么 WebSocket 认证通常通过 URL 参数传递 Token，而不是 Header？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="true">浏览器建立 WebSocket 时无法方便地自定义 HTTP Header</div>
+    <div class="quiz-option" data-correct="false">URL 参数比 Header 更安全</div>
+    <div class="quiz-option" data-correct="false">WebSocket 协议不支持 Header</div>
+    <div class="quiz-option" data-correct="false">Header 传输速度更慢</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>浏览器的原生 WebSocket API（<code>new WebSocket(url)</code>）不支持设置自定义 Header。虽然可以在握手阶段用 Cookie，但跨域场景受限。URL 查询参数是最通用的方案。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch08_q3">
+  <div class="quiz-title">问题 3</div>
+  <div class="quiz-question">心跳机制（ping/pong）的主要目的是？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">加速数据传输</div>
+    <div class="quiz-option" data-correct="true">防止中间代理（如 Nginx）因空闲而断开连接</div>
+    <div class="quiz-option" data-correct="false">加密消息内容</div>
+    <div class="quiz-option" data-correct="false">验证用户身份</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>Nginx 默认 60 秒关闭空闲连接，防火墙也有类似策略。心跳让连接保持"活跃"状态，避免被中间设备静默断开。
+  </div>
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<hr>
+
+<h2>本章小结</h2>
+
+<div class="step-flow">
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>HTTP 是问答，WebSocket 是对话</h4>
+      <p>HTTP 一问一答就结束，WebSocket 建立后双方随时说话。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>ConnectionManager 管理多个连接</h4>
+      <p>维护连接列表，实现广播、私聊、分组等功能。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>WebSocket 认证用 URL 参数</h4>
+      <p>浏览器限制导致 Header 不方便，Token 放查询参数是标准做法。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>心跳保活防止被切断</h4>
+      <p>定期 ping/pong，让 Nginx 和防火墙知道连接还在用。</p>
+    </div>
+  </div>
+</div>
+
+<div class="check-banner">
+  <h3>🛠️ 动手实验</h3>
+  <p>实现一个简单聊天室：用户通过 <code>ws://localhost:8000/chat?token=xxx</code> 连接，服务器验证 Token 后接受连接。<br>实现广播功能：任何用户发消息，所有在线用户都能收到。用浏览器控制台或在线 WebSocket 测试工具连接测试。</p>
+</div>
+
+</article>
+</main>
+
+<button class="back-to-top" id="back-to-top" aria-label="返回顶部">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
+<script src="script.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

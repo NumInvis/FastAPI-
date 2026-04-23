@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch07 异步与后台任务：不等人的艺术 | FastAPI 大师课</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>FastAPI 大师课</span>
+  </a>
+  <div class="topbar-actions">
+    <button class="btn-icon menu-toggle" id="menu-toggle" aria-label="菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="btn-icon" id="theme-toggle" aria-label="切换主题">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside class="sidebar">
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">课程导览</div><a href="index.html" class="sidebar-link">课程介绍</a></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">基础篇</div>
+    <a href="ch01.html" class="sidebar-link">01 第一个 API</a>
+    <a href="ch02.html" class="sidebar-link">02 数据校验</a>
+    <a href="ch03.html" class="sidebar-link">03 依赖注入</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">进阶篇</div>
+    <a href="ch04.html" class="sidebar-link">04 数据库</a>
+    <a href="ch05.html" class="sidebar-link">05 登录与权限</a>
+    <a href="ch06.html" class="sidebar-link">06 错误处理</a>
+    <a href="ch07.html" class="sidebar-link active">07 异步与后台任务</a>
+    <a href="ch08.html" class="sidebar-link">08 WebSocket</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">部署篇</div>
+    <a href="ch09.html" class="sidebar-link">09 测试</a>
+    <a href="ch10.html" class="sidebar-link">10 性能与部署</a>
+    <a href="ch11.html" class="sidebar-link">11 企业级架构</a>
+  </div>
+</aside>
+<div class="overlay"></div>
+
+<main class="main">
+<article class="content">
+
+<h1>Chapter 07 · 异步与后台任务：不等人的艺术</h1>
+
+<div class="learning-objectives">
+  <h3>📚 学完本章，你将能够：</h3>
+  <ul>
+    <li>用生活化的比喻理解 async/await 和事件循环</li>
+    <li>判断一个操作是否应该写成异步的</li>
+    <li>用 <code>BackgroundTasks</code> 处理发邮件等轻量后台工作</li>
+    <li>用 <code>asyncio.gather</code> 并发执行多个 I/O 操作</li>
+    <li>识别 CPU 密集型任务，并知道为什么它不适合放在 async 里</li>
+  </ul>
+</div>
+
+<div class="scenario-box">
+  <h4>💡 场景引入</h4>
+  <p>用户在你的网站注册账号。注册逻辑包括：写数据库 + 发欢迎邮件。如果发邮件需要 3 秒钟，用户就得盯着浏览器转圈 3 秒才能看到"注册成功"。</p>
+  <p>这显然不合理。<strong>发邮件不应该让用户等。</strong>本章教你如何让"发邮件"这件事在后台悄悄进行，同时用异步技术让你的服务器能同时服务更多用户。</p>
+</div>
+
+<h2>7.1 同步 vs 异步：一个咖啡店的比喻</h2>
+
+<p>想象你是一个咖啡师（服务器），面前有一排顾客（请求）：</p>
+
+<div class="compare-group">
+  <div class="compare-box bad">
+    <div class="compare-header">同步模式：一个顾客做完才做下一个</div>
+    <pre><code class="language-python">def make_coffee(order):
+    grind_beans()      # 2秒
+    brew()             # 3秒
+    serve()            # 1秒
+
+# 顾客A（6秒）→ 顾客B（6秒）→ 顾客C（6秒）
+# 总耗时：18秒</code></pre>
+    <p style="padding:0 16px 16px;font-size:0.85rem;color:var(--text-muted)">你在等咖啡豆磨好的时候，干站着不服务其他人。这就是同步阻塞。</p>
+  </div>
+  <div class="compare-box good">
+    <div class="compare-header">异步模式：磨豆的时候去接待下一个人</div>
+    <pre><code class="language-python">async def make_coffee(order):
+    await grind_beans()  # "我去磨豆了，磨好叫我"
+    await brew()         # "我去煮了，煮好叫我"
+    serve()
+
+# 三个顾客的请求交错执行
+# 总耗时：约 6 秒（不是 18 秒！）</code></pre>
+    <p style="padding:0 16px 16px;font-size:0.85rem;color:var(--text-muted)"><code>await</code> 的意思是"这件事需要等待，你去忙别的吧"。事件循环会在磨豆完成时自动切回来。</p>
+  </div>
+</div>
+
+<p><strong>核心区别</strong>：同步代码阻塞线程，异步代码释放线程去干别的。但只有<strong>I/O 操作</strong>（网络请求、数据库查询、文件读写）才适合异步。如果是纯计算（比如算圆周率后100位），<code>await</code> 不会释放线程，因为 CPU 根本停不下来。</p>
+
+<h2>7.2 FastAPI 中的 BackgroundTasks</h2>
+
+<p>对于"发邮件"这种不需要立刻完成、也不要求结果的操作，FastAPI 提供了最简单的后台任务机制：</p>
+
+<div class="code-block">
+<div class="code-header">后台发邮件</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from fastapi import BackgroundTasks
+
+async def send_welcome_email(email: str, username: str):
+    # 模拟发邮件耗时 2 秒
+    await asyncio.sleep(2)
+    print(f"邮件已发送至 {email}")
+
+@app.post("/register")
+async def register(
+    data: UserCreate,
+    background_tasks: BackgroundTasks,
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    user = await create_user(db, data)
+
+    # 把发邮件任务丢到后台，不阻塞响应
+    background_tasks.add_task(send_welcome_email, user.email, user.username)
+
+    # 用户立刻收到响应，不需要等邮件发完
+    return {"message": "注册成功", "user_id": user.id}</code></pre>
+</div>
+
+<div class="callout warning">
+  <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <div>
+    <strong>BackgroundTasks 的限制</strong>
+    <p style="margin-bottom:0">它运行在 Uvicorn 的同一个进程里。如果任务很重（比如处理大文件），或者任务失败了，没有重试机制。对于重要的后台工作，需要用 Celery（第 11 章介绍）。</p>
+  </div>
+</div>
+
+<h2>7.3 并发查询：asyncio.gather</h2>
+
+<p>假设一个页面需要同时展示：用户信息 + 订单列表 + 优惠券。如果串行查询，总耗时是三部分之和。用 <code>gather</code> 可以并发发请求：</p>
+
+<div class="code-block">
+<div class="code-header">并发查询</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">import asyncio
+
+@app.get("/dashboard")
+async def dashboard(user_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    # 三个查询同时发出去，总耗时 ≈ 最慢的那个
+    user, orders, coupons = await asyncio.gather(
+        get_user(db, user_id),
+        get_orders(db, user_id),
+        get_coupons(db, user_id),
+    )
+    return {"user": user, "orders": orders, "coupons": coupons}</code></pre>
+</div>
+
+<div class="diagram-box">
+  <div class="diagram-title">串行 vs 并发</div>
+  <div class="compare-group">
+    <div class="compare-box bad">
+      <div class="compare-header">串行（慢）</div>
+      <pre style="margin:0;padding:16px">用户查询  100ms
+订单查询  150ms  →  总耗时 350ms
+优惠券查询 100ms</pre>
+    </div>
+    <div class="compare-box good">
+      <div class="compare-header">并发（快）</div>
+      <pre style="margin:0;padding:16px">用户查询   ──┐
+订单查询   ──┼──→  总耗时 150ms
+优惠券查询 ──┘</pre>
+    </div>
+  </div>
+</div>
+
+<h2>7.4 CPU 密集型任务的陷阱</h2>
+
+<p>asyncio 不能加速计算。如果你在协程里做大量数学运算，整个事件循环会被卡住，其他请求都得等着。</p>
+
+<div class="code-block">
+<div class="code-header">❌ 错误：在 async 里做 CPU 计算</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">@app.post("/analyze")
+async def analyze(data: list[float]):
+    # 这个循环会阻塞事件循环！
+    result = sum(x ** 2 for x in data)  # 假设数据很大
+    return {"result": result}</code></pre>
+</div>
+
+<p>解决方案：用 <code>ProcessPoolExecutor</code> 把计算丢到单独的进程里，释放事件循环：</p>
+
+<div class="code-block">
+<div class="code-header">✅ 正确：进程池卸载</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from concurrent.futures import ProcessPoolExecutor
+import asyncio
+
+pool = ProcessPoolExecutor(max_workers=4)
+
+def heavy_compute(data: list[float]) -> float:
+    return sum(x ** 2 for x in data)
+
+@app.post("/analyze")
+async def analyze(data: list[float]):
+    # 把 CPU 任务丢到进程池，async 事件循环继续处理其他请求
+    result = await asyncio.get_event_loop().run_in_executor(pool, heavy_compute, data)
+    return {"result": result}</code></pre>
+</div>
+
+<!-- ==================== 测验 ==================== -->
+<h2>🎯 知识检测</h2>
+
+<div class="quiz-box" data-quiz-id="ch07_q1">
+  <div class="quiz-title">问题 1</div>
+  <div class="quiz-question">以下哪种操作最适合用 async/await？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">计算 100 万位圆周率</div>
+    <div class="quiz-option" data-correct="true">等待数据库返回查询结果</div>
+    <div class="quiz-option" data-correct="false">压缩一个大视频文件</div>
+    <div class="quiz-option" data-correct="false">渲染 3D 图像</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>async/await 的优势在于 I/O 等待时释放线程。数据库查询、网络请求、文件读写都是 I/O 操作。而纯计算（数学运算、视频压缩、图像渲染）是 CPU 密集型，async 不会加速它们，反而需要用进程池卸载。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch07_q2">
+  <div class="quiz-title">问题 2</div>
+  <div class="quiz-question"><code>BackgroundTasks</code> 适合做什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">执行必须成功且需要重试的关键支付逻辑</div>
+    <div class="quiz-option" data-correct="true">发送邮件、写日志等"做了更好，失败也不致命"的操作</div>
+    <div class="quiz-option" data-correct="false">执行耗时 30 分钟的大数据处理</div>
+    <div class="quiz-option" data-correct="false">替代数据库事务</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>BackgroundTasks 运行在 Uvicorn 进程内，没有重试机制，进程崩溃时任务会丢失。它只适合轻量、非关键的后台工作。关键任务用 Celery，大计算用专门的 worker。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch07_q3">
+  <div class="quiz-title">问题 3</div>
+  <div class="quiz-question"><code>asyncio.gather</code> 的作用是什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">让代码按顺序执行</div>
+    <div class="quiz-option" data-correct="true">同时启动多个异步任务，等它们全部完成</div>
+    <div class="quiz-option" data-correct="false">自动把同步代码变成异步</div>
+    <div class="quiz-option" data-correct="false">关闭事件循环</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>gather 让你同时发多个异步请求（如查用户、查订单、查优惠券），总耗时等于最慢的那个任务，而不是所有任务之和。这是提升 API 响应速度的利器。
+  </div>
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<hr>
+
+<h2>本章小结</h2>
+
+<div class="step-flow">
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>async 只加速 I/O 等待</h4>
+      <p>数据库查询、网络请求、文件读写适合 async。纯计算不适合。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>BackgroundTasks 做轻量后台工作</h4>
+      <p>发邮件、记日志，不阻塞用户响应。但不保证一定成功。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>gather 并发多个 I/O 操作</h4>
+      <p>多个查询同时发，总时间由最慢的决定，大幅提升响应速度。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>CPU 任务用进程池卸载</h4>
+      <p>别把重计算放在 async 函数里，会卡住整个服务器。</p>
+    </div>
+  </div>
+</div>
+
+<div class="check-banner">
+  <h3>🛠️ 动手实验</h3>
+  <p>实现用户注册接口：写数据库（同步/异步都可以）后，用 BackgroundTasks 异步发送欢迎邮件（模拟 2 秒延迟）。<br>再实现一个仪表板接口，用 <code>asyncio.gather</code> 并发查询"用户信息""最近订单""未读消息"三个来源，验证总耗时是否接近最慢的那个。</p>
+</div>
+
+</article>
+</main>
+
+<button class="back-to-top" id="back-to-top" aria-label="返回顶部">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
+<script src="script.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

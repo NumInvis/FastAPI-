@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch04 数据库：数据的持久化家园 | FastAPI 大师课</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-light.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="index.html" class="topbar-brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <span>FastAPI 大师课</span>
+  </a>
+  <div class="topbar-actions">
+    <button class="btn-icon menu-toggle" id="menu-toggle" aria-label="菜单">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <button class="btn-icon" id="theme-toggle" aria-label="切换主题">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+</header>
+
+<aside class="sidebar">
+  <div class="progress-bar"><div class="progress-fill"></div></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">课程导览</div><a href="index.html" class="sidebar-link">课程介绍</a></div>
+  <div class="sidebar-group"><div class="sidebar-group-title">基础篇</div>
+    <a href="ch01.html" class="sidebar-link">01 第一个 API</a>
+    <a href="ch02.html" class="sidebar-link">02 数据校验</a>
+    <a href="ch03.html" class="sidebar-link">03 依赖注入</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">进阶篇</div>
+    <a href="ch04.html" class="sidebar-link active">04 数据库</a>
+    <a href="ch05.html" class="sidebar-link">05 登录与权限</a>
+    <a href="ch06.html" class="sidebar-link">06 错误处理</a>
+    <a href="ch07.html" class="sidebar-link">07 异步</a>
+    <a href="ch08.html" class="sidebar-link">08 WebSocket</a>
+  </div>
+  <div class="sidebar-group"><div class="sidebar-group-title">部署篇</div>
+    <a href="ch09.html" class="sidebar-link">09 测试</a>
+    <a href="ch10.html" class="sidebar-link">10 性能与部署</a>
+    <a href="ch11.html" class="sidebar-link">11 企业级架构</a>
+  </div>
+</aside>
+<div class="overlay"></div>
+
+<main class="main">
+<article class="content">
+
+<h1>Chapter 04 · 数据库：数据的持久化家园</h1>
+
+<div class="learning-objectives">
+  <h3>📚 学完本章，你将能够：</h3>
+  <ul>
+    <li>解释为什么内存列表不能替代真正的数据库</li>
+    <li>用 SQLAlchemy 2.0 定义数据表模型</li>
+    <li>执行增删改查（CRUD）操作</li>
+    <li>理解什么是"数据库会话（Session）"以及如何正确管理它</li>
+    <li>用 Alembic 管理数据库结构变更（迁移）</li>
+  </ul>
+</div>
+
+<div class="scenario-box">
+  <h4>💡 场景引入</h4>
+  <p>你的图书 API 目前把所有数据存在 Python 的列表里。服务器重启后，数据全丢了。更可怕的是，两个人同时添加书籍时，列表操作不是线程安全的，可能产生混乱。</p>
+  <p><strong>数据库</strong>是专门用来持久化存储数据的软件。它保证：数据不丢失、多人同时操作不冲突、能高效查询。本章教你用 PostgreSQL + SQLAlchemy 把数据真正存下来。</p>
+</div>
+
+<h2>4.1 数据库 vs 内存列表</h2>
+
+<table>
+  <tr><th>特性</th><th>Python 列表</th><th>PostgreSQL 数据库</th></tr>
+  <tr><td>数据持久化</td><td>❌ 程序结束即消失</td><td>✅ 写入硬盘，重启仍在</td></tr>
+  <tr><td>并发安全</td><td>❌ 多线程可能崩溃</td><td>✅ 内置锁机制</td></tr>
+  <tr><td>复杂查询</td><td>❌ 只能遍历</td><td>✅ SQL 高效筛选、排序、聚合</td></tr>
+  <tr><td>事务</td><td>❌ 没有</td><td>✅ 要么全成功，要么全回滚</td></tr>
+  <tr><td>备份恢复</td><td>❌ 难以备份</td><td>✅ 成熟工具链</td></tr>
+</table>
+
+<h2>4.2 SQLAlchemy：Python 和数据库的翻译官</h2>
+
+<p>你可以直接用 SQL 操作数据库，但那样代码又丑又难维护。<strong>ORM（对象关系映射）</strong>让你用 Python 类和对象来操作数据库表。</p>
+
+<p>SQLAlchemy 是 Python 最流行的 ORM。本章使用 <strong>SQLAlchemy 2.0</strong> 语法，它和旧版本有显著不同。</p>
+
+<div class="code-block">
+<div class="code-header">安装依赖</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-bash">pip install sqlalchemy asyncpg</code></pre>
+</div>
+
+<div class="code-block">
+<div class="code-header">models.py</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from datetime import datetime
+from sqlalchemy import String, ForeignKey, DateTime, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+# 声明式基类，所有模型都继承它
+class Base(DeclarativeBase):
+    pass
+
+class Book(Base):
+    __tablename__ = "books"  # 数据库中的表名
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    author: Mapped[str] = mapped_column(String(100))
+    price: Mapped[float]
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())</code></pre>
+</div>
+
+<p>这段代码做了三件事：</p>
+<ol>
+  <li><code>DeclarativeBase</code>：声明"我要用类来定义表结构"</li>
+  <li><code>Mapped[int]</code>：告诉 Python 类型系统，这个字段是整数</li>
+  <li><code>mapped_column(primary_key=True)</code>：告诉 SQLAlchemy，这是主键，数据库会自动自增</li>
+</ol>
+
+<div class="callout info">
+  <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+  <div>
+    <strong>Mapped[] 是什么？</strong>
+    <p style="margin-bottom:0">它是 SQLAlchemy 2.0 引入的类型标注方式。<code>Mapped[int]</code> 不仅让 IDE 能正确提示，也让 SQLAlchemy 知道这一列在数据库中是什么类型。不写 <code>Mapped</code> 也能工作，但写了更好。</p>
+  </div>
+</div>
+
+<h2>4.3 连接数据库：Engine 和 Session</h2>
+
+<p>要操作数据库，你需要两个东西：</p>
+<ul>
+  <li><strong>Engine</strong>：数据库连接池的管理器，负责和 PostgreSQL 建立网络连接</li>
+  <li><strong>Session</strong>：一次"对话"，你在里面执行查询、添加对象、提交更改</li>
+</ul>
+
+<div class="code-block">
+<div class="code-header">database.py</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
+# 数据库连接字符串
+DATABASE_URL = "postgresql+asyncpg://user:password@localhost:5432/mydb"
+
+# 创建引擎（连接池）
+engine = create_async_engine(DATABASE_URL)
+
+# 创建 Session 工厂
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+# 依赖：每个请求创建一个 Session
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session</code></pre>
+</div>
+
+<p><code>asyncpg</code> 是 PostgreSQL 的异步驱动。<code>postgresql+asyncpg://</code> 告诉 SQLAlchemy："用 asyncpg 以异步方式连接 PostgreSQL"。</p>
+
+<h2>4.4 CRUD：增删改查</h2>
+
+<p>现在把上一章的图书 API 从内存列表迁移到真正的数据库：</p>
+
+<div class="tab-group">
+  <ul class="tab-nav">
+    <li><button class="tab-btn active">Create 创建</button></li>
+    <li><button class="tab-btn">Read 读取</button></li>
+    <li><button class="tab-btn">Update 更新</button></li>
+    <li><button class="tab-btn">Delete 删除</button></li>
+  </ul>
+  <div class="tab-panel active">
+    <div class="code-block">
+    <div class="code-header">创建</div>
+    <button class="copy-btn">复制</button>
+    <pre><code class="language-python">@app.post("/books", response_model=BookOut)
+async def create_book(data: BookCreate, db: Annotated[AsyncSession, Depends(get_db)]):
+    book = Book(title=data.title, author=data.author, price=data.price)
+    db.add(book)           # 添加到会话
+    await db.commit()      # 提交到数据库
+    await db.refresh(book) # 刷新，获取数据库生成的 id
+    return book</code></pre>
+    </div>
+  </div>
+  <div class="tab-panel">
+    <div class="code-block">
+    <div class="code-header">读取</div>
+    <button class="copy-btn">复制</button>
+    <pre><code class="language-python">from sqlalchemy import select
+
+@app.get("/books", response_model=list[BookOut])
+async def list_books(db: Annotated[AsyncSession, Depends(get_db)]):
+    result = await db.execute(select(Book))
+    return result.scalars().all()
+
+@app.get("/books/{book_id}", response_model=BookOut)
+async def get_book(book_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    book = await db.get(Book, book_id)  # 按主键查，简单高效
+    if not book:
+        raise HTTPException(404, "Book not found")
+    return book</code></pre>
+    </div>
+  </div>
+  <div class="tab-panel">
+    <div class="code-block">
+    <div class="code-header">更新</div>
+    <button class="copy-btn">复制</button>
+    <pre><code class="language-python">@app.put("/books/{book_id}", response_model=BookOut)
+async def update_book(book_id: int, data: BookCreate, db: Annotated[AsyncSession, Depends(get_db)]):
+    book = await db.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "Book not found")
+    book.title = data.title
+    book.author = data.author
+    book.price = data.price
+    await db.commit()
+    return book</code></pre>
+    </div>
+  </div>
+  <div class="tab-panel">
+    <div class="code-block">
+    <div class="code-header">删除</div>
+    <button class="copy-btn">复制</button>
+    <pre><code class="language-python">@app.delete("/books/{book_id}")
+async def delete_book(book_id: int, db: Annotated[AsyncSession, Depends(get_db)]):
+    book = await db.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "Book not found")
+    await db.delete(book)
+    await db.commit()
+    return {"message": "Deleted successfully"}</code></pre>
+    </div>
+  </div>
+</div>
+
+<h2>4.5 事务：要么全成功，要么全失败</h2>
+
+<p>银行转账是典型的需要事务的场景：A 账户扣款 + B 账户加款，两步必须同时成功。如果第一步成功后服务器崩溃，钱就消失了。</p>
+
+<div class="code-block">
+<div class="code-header">事务示例</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-python">@app.post("/transfer")
+async def transfer(
+    from_id: int, to_id: int, amount: float,
+    db: Annotated[AsyncSession, Depends(get_db)]
+):
+    from_account = await db.get(Account, from_id)
+    to_account = await db.get(Account, to_id)
+
+    if from_account.balance < amount:
+        raise HTTPException(400, "Insufficient balance")
+
+    from_account.balance -= amount
+    to_account.balance += amount
+
+    await db.commit()  # 两步修改一起提交，数据库保证原子性
+    return {"message": "Transfer successful"}</code></pre>
+</div>
+
+<p>如果 <code>commit()</code> 之前的任何一步抛出异常，数据库不会保存任何修改。这就是事务的<strong>原子性</strong>。</p>
+
+<div class="callout warning">
+  <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  <div>
+    <strong>常见陷阱</strong>
+    <p style="margin-bottom:0">忘记调用 <code>await db.commit()</code> 是新手最常犯的错误。SQLAlchemy 默认不会自动提交，必须显式调用。只 <code>db.add()</code> 不 <code>commit()</code>，数据不会真正写入数据库。</p>
+  </div>
+</div>
+
+<h2>4.6 Alembic：数据库结构版本控制</h2>
+
+<p>开发过程中，你经常需要改表结构：加字段、删字段、建索引。手动改数据库又慢又容易出错，团队协作时更是灾难。<strong>Alembic</strong> 是 SQLAlchemy 的数据库迁移工具，它把每一次结构变更记录为脚本，可以升级、降级、回滚。</p>
+
+<div class="code-block">
+<div class="code-header">初始化 Alembic</div>
+<button class="copy-btn">复制</button>
+<pre><code class="language-bash">pip install alembic
+alembic init alembic
+
+# 修改 alembic.ini 中的 sqlalchemy.url
+# 修改 alembic/env.py 导入你的 Base
+
+# 自动生成迁移脚本
+alembic revision --autogenerate -m "create books table"
+
+# 执行迁移（升级数据库）
+alembic upgrade head
+
+# 查看当前版本
+alembic current
+
+# 回退一个版本
+alembic downgrade -1</code></pre>
+</div>
+
+<p>迁移脚本会被保存在 <code>alembic/versions/</code> 文件夹中，提交到 Git。团队成员拉代码后只需运行 <code>alembic upgrade head</code> 即可同步最新的数据库结构。</p>
+
+<!-- ==================== 测验 ==================== -->
+<h2>🎯 知识检测</h2>
+
+<div class="quiz-box" data-quiz-id="ch04_q1">
+  <div class="quiz-title">问题 1</div>
+  <div class="quiz-question"><code>await db.commit()</code> 的作用是什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">关闭数据库连接</div>
+    <div class="quiz-option" data-correct="true">把当前会话中的修改真正写入数据库</div>
+    <div class="quiz-option" data-correct="false">查询数据库最新数据</div>
+    <div class="quiz-option" data-correct="false">删除会话中的所有对象</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>SQLAlchemy 的 Session 是一个"暂存区"。你对对象做的修改（add、delete、改属性）都只存在于内存中，直到调用 commit() 才真正发给数据库。这让你有机会在提交前检查或回滚。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch04_q2">
+  <div class="quiz-title">问题 2</div>
+  <div class="quiz-question">为什么用 <code>db.get(Book, book_id)</code> 而不是直接写 SQL？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">因为写 SQL 是违法的</div>
+    <div class="quiz-option" data-correct="true">ORM 提供类型安全、自动映射和数据库无关性</div>
+    <div class="quiz-option" data-correct="false">db.get 运行速度更快</div>
+    <div class="quiz-option" data-correct="false">PostgreSQL 不支持手写 SQL</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>ORM 的最大价值不是性能（有时手写 SQL 更快），而是开发效率和可维护性。它自动把数据库行转成 Python 对象，支持类型检查，且代码不绑定特定数据库（理论上可以从 PostgreSQL 换成 MySQL 而不改业务代码）。
+  </div>
+</div>
+
+<div class="quiz-box" data-quiz-id="ch04_q3">
+  <div class="quiz-title">问题 3</div>
+  <div class="quiz-question">事务（Transaction）的核心特性是什么？</div>
+  <div class="quiz-options">
+    <div class="quiz-option" data-correct="false">让查询结果按字母排序</div>
+    <div class="quiz-option" data-correct="true">一组操作要么全部成功，要么全部不生效</div>
+    <div class="quiz-option" data-correct="false">自动备份数据库</div>
+    <div class="quiz-option" data-correct="false">限制同时连接数据库的用户数量</div>
+  </div>
+  <div class="quiz-explanation">
+    <strong>解析：</strong>事务的 ACID 特性中，A（Atomicity，原子性）就是指"全或无"。转账时扣款和加款必须在同一个事务中，否则可能出现钱扣了但对方没收到的情况。
+  </div>
+</div>
+
+<!-- ==================== 总结 ==================== -->
+<hr>
+
+<h2>本章小结</h2>
+
+<div class="step-flow">
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>数据库保证数据持久和并发安全</h4>
+      <p>内存列表在重启和并发场景下都不堪一击。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>SQLAlchemy 是 Python 和 SQL 之间的桥梁</h4>
+      <p>用 Python 类定义表，用 Python 对象操作数据，不用手写 SQL。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>Session 是一次数据库对话</h4>
+      <p>add → commit 是两步法。修改只在 commit 后才真正生效。</p>
+    </div>
+  </div>
+  <div class="step-item">
+    <div class="step-badge">✓</div>
+    <div class="step-content">
+      <h4>Alembic 管理数据库结构变更</h4>
+      <p>把改表结构变成可版本控制、可回滚的脚本，团队协作必备。</p>
+    </div>
+  </div>
+</div>
+
+<div class="check-banner">
+  <h3>🛠️ 动手实验</h3>
+  <p>把第 1 章的图书 API 完整迁移到 PostgreSQL：定义 Book 模型、实现 CRUD 五个接口、使用 get_db 依赖管理 Session、配置 Alembic 生成初始迁移并执行。<br>安装 pgAdmin 或 DBeaver，直观看到数据真的写进了数据库表中。</p>
+</div>
+
+</article>
+</main>
+
+<button class="back-to-top" id="back-to-top" aria-label="返回顶部">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+
+<script src="script.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
