@@ -1,4 +1,4 @@
-// FastAPI 大师课 v2 - 交互系统
+﻿// FastAPI 教程 v2 - 交互系统
 
 document.addEventListener('DOMContentLoaded', () => {
   // 深色模式
